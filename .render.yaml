@@ -2,6 +2,6 @@ services:
   - type: web
     name: gw-project
     env: python
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: gunicorn api:app
-    runtime: python-3.10.13
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn api:app"
+    plan: free
