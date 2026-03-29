@@ -14,7 +14,7 @@ scaler = joblib.load("scaler.pkl")
 # Load dataset
 data = pd.read_csv("Spatial_GW_Dataset_2015_Enhanced.csv")
 
-# Feature order
+# Feature order (IMPORTANT)
 columns = [
     "Latitude",
     "Longitude",
@@ -25,71 +25,77 @@ columns = [
     "Prev_GW"
 ]
 
+# -----------------------------
+# HOME
+# -----------------------------
 @app.route("/")
 def home():
-    return "Groundwater Prediction API is running"
+    return jsonify({"message": "Groundwater API Running 🚀"})
 
-# 🚀 ALL-IN-ONE ROUTE
-@app.route("/predict-from-location", methods=["POST"])
-def predict_from_location():
+
+# -----------------------------
+# AUTO-FILL (Nearest Location)
+# -----------------------------
+@app.route("/auto-fill", methods=["POST"])
+def auto_fill():
     try:
         req = request.get_json()
 
-        lat = float(req.get("Latitude"))
-        lon = float(req.get("Longitude"))
+        lat = float(req["Latitude"])
+        lon = float(req["Longitude"])
 
-        if lat is None or lon is None:
-            return jsonify({"error": "Latitude and Longitude required"}), 400
-
-        # 🔥 Find nearest data
+        # Copy dataset (important)
         df = data.copy()
 
-        df["distance"] = (
-            (df["Latitude"] - lat)**2 +
-            (df["Longitude"] - lon)**2
+        # Distance calculation
+        df["distance"] = np.sqrt(
+            (df["Latitude"] - lat) ** 2 +
+            (df["Longitude"] - lon) ** 2
         )
 
         nearest = df.loc[df["distance"].idxmin()]
 
-        # 🔥 Prepare input
-        input_values = [[
-            lat,
-            lon,
-            nearest["Rainfall"],
-            nearest["GW_Recharge"],
-            nearest["GW_Extraction"],
-            nearest["Extraction_Stage_Perc"],
-            nearest["Prev_GW"]
-        ]]
+        return jsonify({
+            "Rainfall": float(nearest["Rainfall"]),
+            "Prev_GW": float(nearest["Prev_GW"]),
+            "GW_Recharge": float(nearest["GW_Recharge"]),
+            "GW_Extraction": float(nearest["GW_Extraction"]),
+            "Extraction_Stage_Perc": float(nearest["Extraction_Stage_Perc"])
+        })
 
-        input_df = pd.DataFrame(input_values, columns=columns)
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
-        # 🔥 Scale + Predict
+
+# -----------------------------
+# PREDICT
+# -----------------------------
+@app.route("/predict", methods=["POST"])
+def predict():
+    try:
+        data_req = request.get_json()
+
+        input_data = [
+            float(data_req[col]) for col in columns
+        ]
+
+        input_df = pd.DataFrame([input_data], columns=columns)
+
         input_scaled = scaler.transform(input_df)
+
         prediction = model.predict(input_scaled)[0]
 
         return jsonify({
             "prediction": float(prediction),
-            "unit": "MBGL",
-
-            # 👇 extra info (frontend ke liye)
-            "auto_filled_data": {
-                "Rainfall": float(nearest["Rainfall"]),
-                "Prev_GW": float(nearest["Prev_GW"]),
-                "GW_Recharge": float(nearest["GW_Recharge"]),
-                "GW_Extraction": float(nearest["GW_Extraction"]),
-                "Extraction_Stage_Perc": float(nearest["Extraction_Stage_Perc"])
-            },
-
-            "nearest_location": {
-                "Latitude": float(nearest["Latitude"]),
-                "Longitude": float(nearest["Longitude"])
-            }
+            "unit": "MBGL"
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)})
 
 
+# -----------------------------
+# RUN
+# -----------------------------
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=10000)
